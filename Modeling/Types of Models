@@ -1,0 +1,66 @@
+1. Baseline Model — Linear Regression (OLS) (covered in class)
+Why:
+	•	Simple, explainable, perfect as a baseline.
+	•	Shows relationships: e.g., does safety increase revenue?
+Key notes:
+	•	Add dummy variables for city and room type.
+	•	Check assumptions / multicollinearity.
+What it reveals:
+	•	Significance of crime/safety indices.
+	•	Approximate effect size of each variable.
+
+2. Regularized Linear Models — Ridge & Lasso
+Why:
+	•	Good when you have many dummy variables from cities.
+	•	Helps avoid overfitting.
+What to compare:
+	•	Lasso → feature selection
+	•	Ridge → keeps all features but shrinks coefficients
+	•	ElasticNet → combination
+What it reveals:
+	•	Whether the crime features remain important under regularization.
+
+3. Tree-Based Model — Decision Tree Regressor (covered in class)
+Why:
+	•	Captures non-linear relationships.
+	•	Very interpretable decision path.
+What it reveals:
+	•	If safety interacts with room type or price ranges.
+	•	Important for explaining price segmentation.
+
+4. Ensemble Model — Random Forest Regressor (covered in class)
+Why:
+	•	Usually outperforms single trees.
+	•	Handles categorical dummies + city differences very well.
+	•	Shows feature importance clearly.
+What it reveals:
+	•	Whether safety or city drives revenue more strongly.
+	•	Stability of predictions across many trees.
+
+5. Gradient Boosting Model — XGBoost or LightGBM (covered in class)
+Why?
+	•	Often the best-performing model on mixed tabular data.
+	•	Handles complex interactions between crime + city + room type.
+What it reveals:
+	•	How incremental improvements (boosting) capture subtle relationships.
+	•	Usually smooths noisy Airbnb data better than random forest.
+
+Typical performance:
+Often wins in Kaggle competitions.
+
+6. k-Nearest Neighbors Regression (KNN)
+Why:
+	•	Simple but useful to benchmark.
+	•	Non-parametric — no linearity assumption.
+What it reveals:
+	•	Whether “similar listings in similar cities with similar safety levels” can predict revenue well.
+	•	Usually good only if dataset is not huge.
+
+7. Support Vector Regression (SVR)
+Why:
+	•	Good for smaller datasets.
+	•	Captures non-linear patterns with RBF or polynomial kernels.
+What it reveals:
+	•	Whether crime/safety effects are non-linear in small areas of the data.
+Challenge:
+	•	Slower, needs scaling.
