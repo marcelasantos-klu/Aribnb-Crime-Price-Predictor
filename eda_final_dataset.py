@@ -72,6 +72,7 @@ def main() -> None:
     print()
 
     # --- Visualizations ---
+
     # Histograms for numeric variables to inspect distributions
     for col in numeric_cols:
         plt.figure()
@@ -85,8 +86,8 @@ def main() -> None:
         unique_vals = df[col].nunique(dropna=False)
         if unique_vals <= 20:
             plt.figure()
-            order = df[col].value_counts(dropna=False).index
-            sns.barplot(x=df[col], y=None, order=order)
+            counts = df[col].value_counts(dropna=False)
+            sns.barplot(x=counts.index, y=counts.values)
             plt.title(f"Bar Plot: {col}")
             plt.xlabel(col)
             plt.ylabel("Count")
