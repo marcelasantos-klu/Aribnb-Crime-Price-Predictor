@@ -19,11 +19,14 @@ def detect_delimiter(path: Path, fallback: str = DEFAULT_DELIMITER) -> str:
 
 
 def main() -> None:
+    """Combine city/day-type Airbnb CSVs into one normalized dataset."""
     frames = []
 
+    # Iterate predictable file names like "amsterdam_weekdays.csv" sorted for stability
     for csv_path in sorted(RAW_DATA_DIR.glob("*_*.csv")):
         city, day_type = csv_path.stem.split("_", 1)
         sep = detect_delimiter(csv_path)
+        # Preserve original delimiter per file to avoid read errors
         df = pd.read_csv(csv_path, sep=sep)
         df["City"] = city
         df["DayType"] = day_type
