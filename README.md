@@ -1,6 +1,9 @@
 
-Objective (Final Version):
-Analyze and model fashion retail product data to understand key drivers of product performance (sales, interest, profitability) and develop predictive models that help optimize inventory, pricing, and assortment.
+## Objective 
+Overview the Airbnb bookings and crime and safety indices in those cities. We found both datasets in Kaggle: one for Airbnb bookings (sales, room type, city) and one for crime and safety indices (city and indices), therefore, the city feature will be a key that links the two datasets. 
+
+The model is made predict the revenue of a booking based on the specific type of accommodation, city, and crime/safety conditions. 
+
 
 Project tasks (aligned with the assignment guide):
 1) Business and data understanding
