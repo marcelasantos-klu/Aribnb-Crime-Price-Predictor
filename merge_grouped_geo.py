@@ -71,6 +71,9 @@ def main() -> None:
     # Add geo_id
     merged["geo_id"] = merged.apply(lambda r: f"{r['lng']}_{r['lat']}", axis=1)
 
+    # Drop lng/lat now that geo_id is present
+    merged = merged.drop(columns=["lng", "lat"], errors="ignore")
+
     merged.to_csv(OUTPUT_PATH, index=False)
     print(f"Wrote merged dataset to {OUTPUT_PATH} with {len(merged)} rows.")
 
