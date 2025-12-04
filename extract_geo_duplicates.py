@@ -12,6 +12,7 @@ OUTPUT_PATH = Path("FinalDataSet_geo_duplicates.csv")
 
 def main() -> None:
     df = pd.read_csv(INPUT_PATH)
+    # Flag rows sharing identical lng/lat regardless of position to surface location collisions.
     dup_mask = df.duplicated(subset=["lng", "lat"], keep=False)
     dup_df = df.loc[dup_mask].copy()
 

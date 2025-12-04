@@ -53,7 +53,8 @@ def main() -> None:
             f"Missing required columns. Group missing: {missing_group}; Mean missing: {missing_mean}"
         )
 
-    # Build aggregation: mean for specified metrics, first for remaining non-group columns
+    # Build aggregation: take means for numeric metrics; keep first value for non-group metadata columns.
+    # Using "first" preserves representative attributes without inflating row counts.
     other_cols = [c for c in df.columns if c not in GROUP_COLS + MEAN_COLS]
     agg = {col: "mean" for col in MEAN_COLS}
     for col in other_cols:
@@ -68,7 +69,7 @@ def main() -> None:
     # Drop unwanted columns after grouping
     merged = merged.drop(columns=[c for c in DROP_AFTER if c in merged.columns], errors="ignore")
 
-    # Add geo_id
+    # Add geo_id to preserve location identity while dropping separate lng/lat columns
     merged["geo_id"] = merged.apply(lambda r: f"{r['lng']}_{r['lat']}", axis=1)
 
     # Drop lng/lat now that geo_id is present

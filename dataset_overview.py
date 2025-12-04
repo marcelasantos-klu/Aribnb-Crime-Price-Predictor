@@ -13,6 +13,7 @@ CRIME_PATH = Path("Indices/World Crime Index .csv")
 
 
 def main() -> None:
+    # Capture log lines in-memory so we can write once to disk at the end; avoids partial files.
     buffer = io.StringIO()
 
     def log(line: str = "") -> None:
@@ -30,7 +31,7 @@ def main() -> None:
     if not airbnb_files:
         log("- No Airbnb CSVs found in Raw Data.")
     else:
-        # Use first file to list columns; sum rows across all files
+        # Use the first file to inspect schema (columns), but aggregate row counts across all city/day files.
         sample_df = pd.read_csv(airbnb_files[0])
         total_rows = 0
         for f in airbnb_files:

@@ -9,7 +9,10 @@ DEFAULT_DELIMITER = ","  # fallback delimiter if sniffing fails
 
 
 def detect_delimiter(path: Path, fallback: str = DEFAULT_DELIMITER) -> str:
-    """Return the detected delimiter (',' or ';') for the given CSV file."""
+    """
+    Return the detected delimiter (',' or ';') for the given CSV file.
+    Some source files use semicolons; sniffing avoids hard-coding a separator that could fail.
+    """
     with path.open("r", newline="", encoding="utf-8") as f:
         sample = f.read(4096)
     try:
@@ -22,12 +25,13 @@ def main() -> None:
     """Combine city/day-type Airbnb CSVs into one normalized dataset."""
     frames = []
 
-    # Iterate predictable file names like "amsterdam_weekdays.csv" sorted for stability
+    # Iterate predictable file names like "amsterdam_weekdays.csv" sorted for deterministic output ordering.
     for csv_path in sorted(RAW_DATA_DIR.glob("*_*.csv")):
         city, day_type = csv_path.stem.split("_", 1)
         sep = detect_delimiter(csv_path)
-        # Preserve original delimiter per file to avoid read errors
+        # Preserve per-file delimiter to avoid mis-parsing when sources mix ',' and ';'.
         df = pd.read_csv(csv_path, sep=sep)
+        # Inject city/day type as explicit columns so downstream merges don't rely on filenames.
         df["City"] = city
         df["DayType"] = day_type
         frames.append(df)

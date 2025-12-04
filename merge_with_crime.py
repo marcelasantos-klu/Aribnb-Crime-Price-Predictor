@@ -1,7 +1,11 @@
+"""
+Join Airbnb listings with city-level crime/safety scores.
+Normalizes city names to avoid mismatches (case/whitespace differences) and disambiguates
+duplicate labels (e.g., London in multiple countries) before merging.
+"""
 from pathlib import Path
 
 import pandas as pd
-
 AIRBNB_PATH = Path("FinalAirbnb.csv")
 CRIME_PATH = Path("Indices/World Crime Index .csv")
 OUTPUT_PATH = Path("FinalDataSet.csv")
@@ -18,12 +22,13 @@ def get_city_column(df: pd.DataFrame) -> str:
 
 def main() -> None:
     """Merge Airbnb listings with crime/safety indices by city."""
-    # Load Airbnb export and drop unnamed index columns that appear after CSV saves
+    # Load Airbnb export and drop unnamed index columns that appear after CSV saves.
+    # Keeping this clean avoids merge-key surprises from stray columns.
     airbnb = pd.read_csv(AIRBNB_PATH)
     airbnb = airbnb.loc[:, ~airbnb.columns.str.startswith("Unnamed:")]
 
     city_col = get_city_column(airbnb)
-    # Normalize merge key to be case-insensitive and whitespace-tolerant
+    # Normalize merge key to be case-insensitive and whitespace-tolerant so that "London " matches "london".
     airbnb["_merge_key"] = airbnb[city_col].str.lower().str.strip()
 
     # Load crime data with only the relevant score columns
@@ -43,14 +48,14 @@ def main() -> None:
         )
     ]
 
-    # Reset City to the clean city name and discard helper columns
+    # Reset City to the clean city name and discard helper columns now that they're only used for filtering.
     crime["City"] = crime["City_only"]
     crime = crime.drop(columns=["City_only", "Country"])
 
     # Build the same normalized merge key as for the Airbnb frame
     crime["_merge_key"] = crime["City"].str.lower().str.strip()
 
-    # Perform a left merge so all Airbnb rows are preserved
+    # Perform a left merge so all Airbnb rows are preserved even if crime stats are missing.
     merged = airbnb.merge(
         crime[["_merge_key", "Crime Index", "Safety Index"]],
         on="_merge_key",

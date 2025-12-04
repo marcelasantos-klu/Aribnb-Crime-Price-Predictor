@@ -19,10 +19,11 @@ DATA_PATH = "FinalDataSet.csv"
 TARGET_COL = None  # e.g., "price" or "label"; set to None if there is no target
 REVENUE_COL = "realSum"  # column representing revenue
 OUTPUT_TXT = "eda_terminal_output.txt"  # capture all printed output here
-SHOW_PLOTS = True  # set True to open plot windows; False keeps run headless for faster completion
+SHOW_PLOTS = True  # set True to open plot windows; False keeps run headless (and CI-friendly) for faster completion
 
 
 def main() -> None:
+    # Buffer stdout so the same text goes both to console and to file at the end.
     buffer = io.StringIO()
 
     def log(*args, **kwargs) -> None:
@@ -139,7 +140,7 @@ def main() -> None:
         # Report top correlated numeric feature pairs to spot multicollinearity risks
         if len(numeric_cols) >= 2:
             corr_matrix = df[numeric_cols].corr().abs()
-            # Keep upper triangle without diagonal
+            # Keep upper triangle without diagonal to avoid duplicate/repeated pairs.
             tri_mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
             corr_pairs = corr_matrix.where(tri_mask).stack().sort_values(ascending=False)
             top_corr_pairs = corr_pairs.head(10)
@@ -241,7 +242,8 @@ def main() -> None:
         # Boxplots for outlier detection on top-variance numeric columns
         if numeric_cols:
             variances = df[numeric_cols].var().sort_values(ascending=False)
-            top_box_cols = variances.index.tolist()[: min(len(variances), 8)]  # plot up to 8
+            # Focus on highest-variance columns where outliers are more informative; cap plot count for readability.
+            top_box_cols = variances.index.tolist()[: min(len(variances), 8)]
             for col in top_box_cols:
                 plt.figure()
                 sns.boxplot(x=df[col])
