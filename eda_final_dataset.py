@@ -236,7 +236,7 @@ def main() -> None:
         if len(numeric_cols) >= 2:
             plt.figure(figsize=(10, 8))
             corr = df[numeric_cols].corr()
-            sns.heatmap(corr, annot=False, cmap="coolwarm", center=0)
+            sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", center=0)
             plt.title("Correlation Heatmap (numeric features)")
 
         # Boxplots for outlier detection on top-variance numeric columns
