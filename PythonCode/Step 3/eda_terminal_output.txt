@@ -1,0 +1,294 @@
+=== Preview of data (head) ===
+      realSum     room_type  room_shared  ...   DayType  Crime Index  Safety Index
+0  194.033698  Private room        False  ...  weekdays        33.06         66.94
+1  344.245776  Private room        False  ...  weekdays        33.06         66.94
+2  264.101422  Private room        False  ...  weekdays        33.06         66.94
+3  433.529398  Private room        False  ...  weekdays        33.06         66.94
+4  485.552926  Private room        False  ...  weekdays        33.06         66.94
+
+[5 rows x 23 columns] 
+
+=== Shape (rows, columns) ===
+(51707, 23) 
+
+=== Data types ===
+realSum                       float64
+room_type                      object
+room_shared                      bool
+room_private                     bool
+person_capacity               float64
+host_is_superhost                bool
+multi                           int64
+biz                             int64
+cleanliness_rating            float64
+guest_satisfaction_overall    float64
+bedrooms                        int64
+dist                          float64
+metro_dist                    float64
+attr_index                    float64
+attr_index_norm               float64
+rest_index                    float64
+rest_index_norm               float64
+lng                           float64
+lat                           float64
+City                           object
+DayType                        object
+Crime Index                   float64
+Safety Index                  float64
+dtype: object 
+
+=== Missing values per column ===
+realSum                       0
+metro_dist                    0
+Crime Index                   0
+DayType                       0
+City                          0
+lat                           0
+lng                           0
+rest_index_norm               0
+rest_index                    0
+attr_index_norm               0
+attr_index                    0
+dist                          0
+room_type                     0
+bedrooms                      0
+guest_satisfaction_overall    0
+cleanliness_rating            0
+biz                           0
+multi                         0
+host_is_superhost             0
+person_capacity               0
+room_private                  0
+room_shared                   0
+Safety Index                  0
+dtype: int64 
+
+=== Missing value ratio (%) per column ===
+realSum                       0.0
+metro_dist                    0.0
+Crime Index                   0.0
+DayType                       0.0
+City                          0.0
+lat                           0.0
+lng                           0.0
+rest_index_norm               0.0
+rest_index                    0.0
+attr_index_norm               0.0
+attr_index                    0.0
+dist                          0.0
+room_type                     0.0
+bedrooms                      0.0
+guest_satisfaction_overall    0.0
+cleanliness_rating            0.0
+biz                           0.0
+multi                         0.0
+host_is_superhost             0.0
+person_capacity               0.0
+room_private                  0.0
+room_shared                   0.0
+Safety Index                  0.0
+dtype: float64 
+
+=== Duplicate rows ===
+0 duplicated rows
+
+=== Constant columns ===
+None
+
+=== Numeric summary (describe) ===
+                              count        mean  ...         75%           max
+realSum                     51707.0  279.879591  ...  319.694287  18545.450285
+person_capacity             51707.0    3.161661  ...    4.000000      6.000000
+multi                       51707.0    0.291353  ...    1.000000      1.000000
+biz                         51707.0    0.350204  ...    1.000000      1.000000
+cleanliness_rating          51707.0    9.390624  ...   10.000000     10.000000
+guest_satisfaction_overall  51707.0   92.628232  ...   99.000000    100.000000
+bedrooms                    51707.0    1.158760  ...    1.000000     10.000000
+dist                        51707.0    3.191285  ...    4.263077     25.284557
+metro_dist                  51707.0    0.681540  ...    0.737840     14.273577
+attr_index                  51707.0  294.204105  ...  385.756381   4513.563486
+attr_index_norm             51707.0   13.423792  ...   17.415082    100.000000
+rest_index                  51707.0  626.856696  ...  832.628988   6696.156772
+rest_index_norm             51707.0   22.786177  ...   32.964603    100.000000
+lng                         51707.0    7.426068  ...   13.518825     23.786020
+lat                         51707.0   45.671128  ...   51.471885     52.641410
+Crime Index                 51707.0   46.429583  ...   53.290000     56.420000
+Safety Index                51707.0   53.570417  ...   64.940000     73.150000
+
+[17 rows x 8 columns] 
+
+=== Categorical summary (unique counts & top frequency) ===
+                                                      room_type  ...                           DayType
+n_unique                                                      3  ...                                 2
+top_3_values  Entire home/apt: 32648; Private room: 18693; S...  ...  weekends: 26207; weekdays: 25500
+
+[2 rows x 6 columns] 
+
+=== Boolean columns value counts (True/False) ===
+room_shared: {False: 51341, True: 366}
+room_private: {False: 33014, True: 18693}
+host_is_superhost: {False: 38475, True: 13232}
+
+=== room_type value counts ===
+room_type
+Entire home/apt    32648
+Private room       18693
+Shared room          366
+Name: count, dtype: int64
+
+=== Value counts for selected discrete columns ===
+bedrooms:
+bedrooms
+0      4485
+1     36333
+2      9290
+3      1477
+4        96
+5        10
+6         2
+8         2
+9        10
+10        2
+Name: count, dtype: int64
+person_capacity:
+person_capacity
+2.0    24333
+3.0     6165
+4.0    14000
+5.0     2935
+6.0     4274
+Name: count, dtype: int64
+biz:
+biz
+0    33599
+1    18108
+Name: count, dtype: int64
+multi:
+multi
+0    36642
+1    15065
+Name: count, dtype: int64
+
+=== Value counts for rating columns ===
+cleanliness_rating:
+cleanliness_rating
+2.0       143
+3.0        10
+4.0       143
+5.0        86
+6.0       501
+7.0       947
+8.0      4352
+9.0     15458
+10.0    30067
+Name: count, dtype: int64
+guest_satisfaction_overall:
+guest_satisfaction_overall
+20.0       155
+30.0         8
+40.0       123
+44.0         2
+46.0         1
+47.0        16
+50.0        44
+53.0        14
+54.0         1
+55.0         4
+56.0         5
+57.0         5
+60.0       475
+61.0         1
+62.0         4
+63.0        21
+64.0        13
+65.0        32
+66.0         6
+67.0       100
+68.0        33
+69.0        32
+70.0       269
+71.0        51
+72.0        73
+73.0       186
+74.0        81
+75.0       174
+76.0       173
+77.0       166
+78.0       177
+79.0       163
+80.0      2059
+81.0       210
+82.0       354
+83.0       589
+84.0       665
+85.0       774
+86.0       772
+87.0      1259
+88.0      1365
+89.0      1309
+90.0      2607
+91.0      1799
+92.0      2025
+93.0      3329
+94.0      2615
+95.0      3299
+96.0      3532
+97.0      3626
+98.0      3889
+99.0      2341
+100.0    10681
+Name: count, dtype: int64
+
+=== Data quality signals ===
+
+Skewed numeric columns (|skew|>1):
+ realSum                       21.419957
+metro_dist                     4.060445
+attr_index                     2.759981
+attr_index_norm                2.193167
+dist                           1.731195
+rest_index                     1.694356
+bedrooms                       1.367776
+rest_index_norm                1.097455
+cleanliness_rating            -2.850286
+guest_satisfaction_overall    -3.174908
+dtype: float64
+
+=== Top correlated numeric feature pairs (abs corr) ===
+Crime Index         Safety Index                  1.000000
+attr_index          rest_index                    0.850229
+                    attr_index_norm               0.714847
+cleanliness_rating  guest_satisfaction_overall    0.714045
+rest_index          rest_index_norm               0.617970
+person_capacity     bedrooms                      0.560627
+dist                metro_dist                    0.558064
+attr_index          rest_index_norm               0.544403
+attr_index_norm     rest_index                    0.527623
+                    rest_index_norm               0.472143
+dtype: float64 
+
+=== Revenue by City x DayType with Crime/Safety context ===
+     City  DayType  mean_revenue  median_revenue  min_revenue  max_revenue  std_revenue  mean_crime_index  mean_safety_index  count
+amsterdam weekends    604.828018      491.645771   165.912872  8130.668104   443.682821             33.06              66.94    977
+amsterdam weekdays    545.020526      430.248635   128.887118  7782.907225   416.974314             33.06              66.94   1103
+    paris weekdays    398.786678      318.529220    92.739305 16445.614689   396.367985             56.02              43.98   3130
+    paris weekends    387.028589      316.199087    95.302451  4188.414577   260.075100             56.02              43.98   3558
+   london weekends    364.389747      268.115431    54.328653 12937.275101   437.742534             53.29              46.71   5379
+   london weekdays    360.230348      256.355982    64.676968 15499.894165   507.782888             53.29              46.71   4614
+barcelona weekends    300.277940      204.691973    80.992390  6942.770033   393.207126             48.87              51.13   1278
+barcelona weekdays    288.391667      208.532129    69.588289  6943.700980   321.180435             48.87              51.13   1555
+   berlin weekends    249.252516      192.460503    64.971487  5856.081144   240.584178             42.24              57.76   1200
+   vienna weekends    242.739524      212.000093    63.576654 13656.358834   333.973791             26.85              73.15   1799
+   vienna weekdays    240.384834      204.520487    69.653834 13664.305916   454.526276             26.85              73.15   1738
+   berlin weekdays    240.220422      187.786295    64.971487  5857.483407   230.318175             42.24              57.76   1284
+   lisbon weekends    240.044051      227.720450    70.590994  1188.086304   109.459172             29.17              70.83   2906
+   lisbon weekdays    236.345459      223.030019    70.825516  1681.050657   108.463770             29.17              70.83   2857
+     rome weekends    209.130063      184.462161    46.057092  2311.738714   119.367764             53.11              46.89   4535
+     rome weekdays    201.618053      179.786314    46.057092  2418.348023   117.749372             53.11              46.89   4492
+ budapest weekends    185.120628      160.031959    34.779339  3751.233727   135.855683             35.06              64.94   1948
+ budapest weekdays    168.429367      147.459698    37.129295  3630.681017   126.059120             35.06              64.94   2074
+   athens weekdays    155.866982      127.715417    42.884259 18545.450285   366.573124             56.42              43.58   2653
+   athens weekends    147.580456      127.715417    42.884259  1043.282638    79.814934             56.42              43.58   2627 
+
+No supervised target set; set TARGET_COL to enable target-based analyses.
+
