@@ -1,5 +1,7 @@
 
 models/
 plots/
+models_without_outliers/
+plots_without_outliers/
 catboost_info/
 models_without_outliers/

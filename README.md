@@ -44,4 +44,29 @@ Checklist to satisfy assessment criteria
 - Choices are explained in the report; structure and flow are clear.
 - Team can justify design decisions and discuss limitations in an oral defense.
 
+## Setup & Dependencies
+Run the project with Python 3.9+ and these key packages:
+- pandas, numpy, seaborn, matplotlib
+- scikit-learn, joblib
+- lightgbm, catboost, xgboost
+
+Quick install:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pandas numpy seaborn matplotlib scikit-learn joblib lightgbm catboost xgboost
+```
+
+macOS OpenMP note (LightGBM/XGBoost): ensure `libomp.dylib` is discoverable. If Homebrew libomp is missing, you can point to the Torch-bundled copy:
+```bash
+export DYLD_LIBRARY_PATH="$HOME/Library/Python/3.9/lib/python/site-packages/torch/lib:${DYLD_LIBRARY_PATH}"
+export DYLD_FALLBACK_LIBRARY_PATH="$HOME/Library/Python/3.9/lib/python/site-packages/torch/lib:${DYLD_FALLBACK_LIBRARY_PATH}"
+```
+
+## How to Run
+1) Data prep/EDA: run the scripts under `PythonCode/Step 1`–`Step 4` and `PythonCode/Step 2/edaOnMergedDataSet.py` (headless plotting enabled by default).  
+2) Modeling: use `final_models.py` (full data) or `final_models_without_outliers.py` (IQR outlier filtering). Both train log-target models, generate plots in `plots*/`, and save pipelines in `models*/`.  
+3) Logs/outputs: EDA logs to `eda_terminal_output.txt`; model performance is printed to console and plots are saved to the plots folders.  
+
+Large model artifacts are ignored via `.gitignore`; regenerate locally by re-running the modeling scripts.
 
