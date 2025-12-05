@@ -51,22 +51,7 @@ MODELS_DIR = Path("models_without_outliers")
 # OPTIONAL LIBOMP FOR LIGHTGBM ON MACOS
 # ===============================================================
 
-def load_libomp_if_available() -> None:shayanrazi@MacBook-Air-von-Shayan Dynamic-Pricing-in-Retail-Fashion-Industry-Data-Science % git push
-
-Enumerating objects: 36, done.
-Counting objects: 100% (36/36), done.
-Delta compression using up to 8 threads
-Compressing objects: 100% (34/34), done.
-Writing objects: 100% (34/34), 106.16 MiB | 9.28 MiB/s, done.
-Total 34 (delta 3), reused 0 (delta 0), pack-reused 0
-remote: Resolving deltas: 100% (3/3), completed with 1 local object.
-remote: error: Trace: 8b9cdbf0995a3cfdf65d1cd34f92a302f02beb452af6e0a25d563a39a70cc839
-remote: error: See https://gh.io/lfs for more information.
-remote: error: File models_without_outliers/model_random_forest.pkl is 398.62 MB; this exceeds GitHub's file size limit of 100.00 MB
-remote: error: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.
-To https://github.com/marcelasantos-klu/Dynamic-Pricing-in-Retail-Fashion-Industry-Data-Science.git
- ! [remote rejected] main -> main (pre-receive hook declined)
-error: failed to push some refs to 'https://github.com/marcelasantos-klu/Dynamic-Pricing-in-Retail-Fashion-Industry-Data-Science.git'
+def load_libomp_if_available() -> None:
     candidates = [
         Path("/opt/homebrew/opt/libomp/lib/libomp.dylib"),
         Path("/usr/local/opt/libomp/lib/libomp.dylib"),
