@@ -13,6 +13,7 @@ Changes vs. old version:
 
 from __future__ import annotations
 
+import argparse
 import ctypes
 import os
 from pathlib import Path
@@ -41,10 +42,20 @@ from sklearn.ensemble import RandomForestRegressor
 # ===============================================================
 
 DATA_PATH = Path("data/FinalFile/FinalDataSet_geo_merged.csv")
-TEST_SIZE = 0.2
 RANDOM_STATE = 42
-PLOTS_DIR = Path("Modeling/plots")
-MODELS_DIR = Path("Modeling/models")
+PLOTS_DIR = Path("plots&models/WithOutliers/plots")
+MODELS_DIR = Path("plots&models/WithOutliers/models")
+# Add more split options here; switch SPLIT_STRATEGY to pick one.
+SPLIT_STRATEGIES = {
+    # Current default: 80/20 split, stratified by city
+    "city_stratified_80_20_seed42": {"test_size": 0.2, "random_state": 42, "stratify_by_city": True},
+    # More conservative hold-out for broader testing
+    "city_stratified_70_30_seed42": {"test_size": 0.3, "random_state": 42, "stratify_by_city": True},
+    # Same 80/20 but different seed to check stability
+    "city_stratified_80_20_seed99": {"test_size": 0.2, "random_state": 99, "stratify_by_city": True},
+}
+DEFAULT_SPLIT_STRATEGY = "city_stratified_80_20_seed42"
+SPLIT_STRATEGY = DEFAULT_SPLIT_STRATEGY
 
 
 # ===============================================================
@@ -112,6 +123,65 @@ def load_data() -> pd.DataFrame:
     })
     df = df.drop(columns=["geo_id"], errors="ignore")
     return df
+
+
+def prompt_split_strategy(default: str = DEFAULT_SPLIT_STRATEGY) -> str:
+    """
+    Ask the user to pick a split strategy at runtime.
+    """
+    options = list(SPLIT_STRATEGIES.keys())
+    print("Select split strategy:")
+    for idx, key in enumerate(options, 1):
+        print(f"[{idx}] {key}")
+
+    prompt = f"Enter choice 1-{len(options)} or name (default {default}): "
+    try:
+        user_input = input(prompt).strip()
+    except EOFError:
+        user_input = ""
+
+    if not user_input:
+        return default
+
+    if user_input.isdigit():
+        choice = int(user_input)
+        if 1 <= choice <= len(options):
+            return options[choice - 1]
+
+    if user_input in SPLIT_STRATEGIES:
+        return user_input
+
+    print(f"Invalid input '{user_input}', using default {default}")
+    return default
+
+
+def make_train_test_split(
+    X: pd.DataFrame,
+    y_log: pd.Series,
+    city_series: pd.Series,
+    strategy_key: Optional[str] = None,
+):
+    """
+    Create a train/test split based on the configured SPLIT_STRATEGY.
+
+    Returns
+    -------
+    tuple
+        X_train, X_test, y_train_log, y_test_log
+    """
+    key = strategy_key or SPLIT_STRATEGY
+    cfg = SPLIT_STRATEGIES.get(key)
+    if cfg is None:
+        print(f"Unknown split '{key}', falling back to {DEFAULT_SPLIT_STRATEGY}")
+        cfg = SPLIT_STRATEGIES[DEFAULT_SPLIT_STRATEGY]
+        key = DEFAULT_SPLIT_STRATEGY
+    stratify = city_series if cfg.get("stratify_by_city") else None
+    return train_test_split(
+        X, y_log,
+        test_size=cfg["test_size"],
+        random_state=cfg["random_state"],
+        stratify=stratify,
+    )
 
 
 # ===============================================================
@@ -352,7 +422,7 @@ def feature_importance_df(pipeline: Pipeline, top_n: int = 10):
 # MAIN
 # ===============================================================
 
-def main() -> None:
+def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -> None:
     """
     End-to-end training, evaluation, and visualization pipeline for price models.
 
@@ -393,12 +463,14 @@ def main() -> None:
     y_log = np.log1p(y_raw)
     X = df.drop(columns=["realSum"])
 
-    # Stratified Train/Test split by city
-    X_train, X_test, y_train_log, y_test_log = train_test_split(
-        X, y_log,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE,
-        stratify=df["City"],
+    # Train/Test split (configurable)
+    selected_split = split_strategy
+    if prompt_for_split and not selected_split:
+        selected_split = prompt_split_strategy()
+    selected_split = selected_split or SPLIT_STRATEGY
+    print(f"Split strategy: {selected_split}")
+    X_train, X_test, y_train_log, y_test_log = make_train_test_split(
+        X, y_log, df["City"], strategy_key=selected_split
     )
 
     # Raw-scale targets for evaluation
@@ -597,4 +669,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train Airbnb price models.")
+    parser.add_argument(
+        "--split",
+        choices=list(SPLIT_STRATEGIES.keys()),
+        help="Choose the train/test split strategy.",
+    )
+    args = parser.parse_args()
+    main(split_strategy=args.split, prompt_for_split=args.split is None)
