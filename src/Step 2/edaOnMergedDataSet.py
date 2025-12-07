@@ -132,11 +132,15 @@ def main() -> None:
 
             top_n = min(len(city_counts), 20)
             plt.figure(figsize=(10, 6))
-            sns.barplot(x=city_counts.head(top_n).index, y=city_counts.head(top_n).values)
+            top_counts = city_counts.head(top_n)
+            ax = sns.barplot(x=top_counts.index, y=top_counts.values)
             plt.title(f"Bookings per City (top {top_n})")
             plt.xlabel("City")
             plt.ylabel("Bookings")
             plt.xticks(rotation=45, ha="right")
+            # Add count labels on bars
+            for i, v in enumerate(top_counts.values):
+                ax.text(i, v, f"{v:,}", ha="center", va="bottom", fontsize=8)
             save_fig("bookings_per_city.png")
             plt.close()
             log()

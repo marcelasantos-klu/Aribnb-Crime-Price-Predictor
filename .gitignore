@@ -2,6 +2,7 @@
 models/
 plots/
 models_without_outliers/
+plots&models
 plots_without_outliers/
 catboost_info/
 models_without_outliers/

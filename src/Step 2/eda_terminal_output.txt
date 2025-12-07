@@ -1,10 +1,10 @@
 === Preview of data (head) ===
-      realSum  ... Safety Index
-0  194.033698  ...        66.94
-1  344.245776  ...        66.94
-2  264.101422  ...        66.94
-3  433.529398  ...        66.94
-4  485.552926  ...        66.94
+      realSum     room_type  ...  Crime Index  Safety Index
+0  194.033698  Private room  ...        33.06         66.94
+1  344.245776  Private room  ...        33.06         66.94
+2  264.101422  Private room  ...        33.06         66.94
+3  433.529398  Private room  ...        33.06         66.94
+4  485.552926  Private room  ...        33.06         66.94
 
 [5 rows x 23 columns] 
 
