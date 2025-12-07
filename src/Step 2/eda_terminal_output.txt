@@ -1,10 +1,10 @@
 === Preview of data (head) ===
-      realSum     room_type  room_shared  room_private  person_capacity  ...       lat       City   DayType  Crime Index  Safety Index
-0  194.033698  Private room        False          True              2.0  ...  52.41772  amsterdam  weekdays        33.06         66.94
-1  344.245776  Private room        False          True              4.0  ...  52.37432  amsterdam  weekdays        33.06         66.94
-2  264.101422  Private room        False          True              2.0  ...  52.36103  amsterdam  weekdays        33.06         66.94
-3  433.529398  Private room        False          True              4.0  ...  52.37663  amsterdam  weekdays        33.06         66.94
-4  485.552926  Private room        False          True              2.0  ...  52.37508  amsterdam  weekdays        33.06         66.94
+      realSum  ... Safety Index
+0  194.033698  ...        66.94
+1  344.245776  ...        66.94
+2  264.101422  ...        66.94
+3  433.529398  ...        66.94
+4  485.552926  ...        66.94
 
 [5 rows x 23 columns] 
 
@@ -96,24 +96,26 @@ dtype: float64
 None
 
 === Numeric summary (describe) ===
-                              count        mean         std        min         25%         50%         75%           max
-realSum                     51707.0  279.879591  327.948386  34.779339  148.752174  211.343089  319.694287  18545.450285
-person_capacity             51707.0    3.161661    1.298545   2.000000    2.000000    3.000000    4.000000      6.000000
-multi                       51707.0    0.291353    0.454390   0.000000    0.000000    0.000000    1.000000      1.000000
-biz                         51707.0    0.350204    0.477038   0.000000    0.000000    0.000000    1.000000      1.000000
-cleanliness_rating          51707.0    9.390624    0.954868   2.000000    9.000000   10.000000   10.000000     10.000000
-guest_satisfaction_overall  51707.0   92.628232    8.945531  20.000000   90.000000   95.000000   99.000000    100.000000
-bedrooms                    51707.0    1.158760    0.627410   0.000000    1.000000    1.000000    1.000000     10.000000
-dist                        51707.0    3.191285    2.393803   0.015045    1.453142    2.613538    4.263077     25.284557
-metro_dist                  51707.0    0.681540    0.858023   0.002301    0.248480    0.413269    0.737840     14.273577
-attr_index                  51707.0  294.204105  224.754123  15.152201  136.797385  234.331748  385.756381   4513.563486
-attr_index_norm             51707.0   13.423792    9.807985   0.926301    6.380926   11.468305   17.415082    100.000000
-rest_index                  51707.0  626.856696  497.920226  19.576924  250.854114  522.052783  832.628988   6696.156772
-rest_index_norm             51707.0   22.786177   17.804096   0.592757    8.751480   17.542238   32.964603    100.000000
-lng                         51707.0    7.426068    9.799725  -9.226340   -0.072500    4.873000   13.518825     23.786020
-lat                         51707.0   45.671128    5.249263  37.953000   41.399510   47.506690   51.471885     52.641410
-Crime Index                 51707.0   46.429583   10.808233  26.850000   35.060000   53.110000   53.290000     56.420000
-Safety Index                51707.0   53.570417   10.808233  43.580000   46.710000   46.890000   64.940000     73.150000 
+                              count  ...           max
+realSum                     51707.0  ...  18545.450285
+person_capacity             51707.0  ...      6.000000
+multi                       51707.0  ...      1.000000
+biz                         51707.0  ...      1.000000
+cleanliness_rating          51707.0  ...     10.000000
+guest_satisfaction_overall  51707.0  ...    100.000000
+bedrooms                    51707.0  ...     10.000000
+dist                        51707.0  ...     25.284557
+metro_dist                  51707.0  ...     14.273577
+attr_index                  51707.0  ...   4513.563486
+attr_index_norm             51707.0  ...    100.000000
+rest_index                  51707.0  ...   6696.156772
+rest_index_norm             51707.0  ...    100.000000
+lng                         51707.0  ...     23.786020
+lat                         51707.0  ...     52.641410
+Crime Index                 51707.0  ...     56.420000
+Safety Index                51707.0  ...     73.150000
+
+[17 rows x 8 columns] 
 
 === Categorical summary (unique counts & top frequency) ===
                                                       room_type  ...                           DayType
@@ -133,6 +135,22 @@ Entire home/apt    32648
 Private room       18693
 Shared room          366
 Name: count, dtype: int64
+
+=== Bookings per City ===
+City
+london       9993
+rome         9027
+paris        6688
+lisbon       5763
+athens       5280
+budapest     4022
+vienna       3537
+barcelona    2833
+berlin       2484
+amsterdam    2080
+Name: count, dtype: int64 
+
+Saved figure → plots&models/EDA/bookings_per_city.png
 
 === Value counts for selected discrete columns ===
 bedrooms:
@@ -288,5 +306,40 @@ barcelona weekdays    288.391667      208.532129    69.588289  6943.700980   321
    athens weekdays    155.866982      127.715417    42.884259 18545.450285   366.573124             56.42              43.58   2653
    athens weekends    147.580456      127.715417    42.884259  1043.282638    79.814934             56.42              43.58   2627 
 
+Saved figure → plots&models/EDA/revenue_by_city_daytype_box.png
+Saved figure → plots&models/EDA/revenue_vs_crime_index.png
+Saved figure → plots&models/EDA/revenue_vs_safety_index.png
+Saved figure → plots&models/EDA/hist_realSum.png
+Saved figure → plots&models/EDA/hist_person_capacity.png
+Saved figure → plots&models/EDA/hist_multi.png
+Saved figure → plots&models/EDA/hist_biz.png
+Saved figure → plots&models/EDA/hist_cleanliness_rating.png
+Saved figure → plots&models/EDA/hist_guest_satisfaction_overall.png
+Saved figure → plots&models/EDA/hist_bedrooms.png
+Saved figure → plots&models/EDA/hist_dist.png
+Saved figure → plots&models/EDA/hist_metro_dist.png
+Saved figure → plots&models/EDA/hist_attr_index.png
+Saved figure → plots&models/EDA/hist_attr_index_norm.png
+Saved figure → plots&models/EDA/hist_rest_index.png
+Saved figure → plots&models/EDA/hist_rest_index_norm.png
+Saved figure → plots&models/EDA/hist_lng.png
+Saved figure → plots&models/EDA/hist_lat.png
+Saved figure → plots&models/EDA/hist_Crime Index.png
+Saved figure → plots&models/EDA/hist_Safety Index.png
+Saved figure → plots&models/EDA/bar_room_type.png
+Saved figure → plots&models/EDA/bar_room_shared.png
+Saved figure → plots&models/EDA/bar_room_private.png
+Saved figure → plots&models/EDA/bar_host_is_superhost.png
+Saved figure → plots&models/EDA/bar_City.png
+Saved figure → plots&models/EDA/bar_DayType.png
+Saved figure → plots&models/EDA/correlation_heatmap.png
+Saved figure → plots&models/EDA/boxplot_rest_index.png
+Saved figure → plots&models/EDA/boxplot_realSum.png
+Saved figure → plots&models/EDA/boxplot_attr_index.png
+Saved figure → plots&models/EDA/boxplot_rest_index_norm.png
+Saved figure → plots&models/EDA/boxplot_Crime Index.png
+Saved figure → plots&models/EDA/boxplot_Safety Index.png
+Saved figure → plots&models/EDA/boxplot_attr_index_norm.png
+Saved figure → plots&models/EDA/boxplot_lng.png
 No supervised target set; set TARGET_COL to enable target-based analyses.
 

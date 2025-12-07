@@ -25,6 +25,7 @@ DATA_PATH = None  # resolved at runtime
 TARGET_COL = None  # e.g., "price" or "label"; set to None if there is no target
 REVENUE_COL = "realSum"  # column representing revenue
 OUTPUT_TXT = "src/Step 2/eda_terminal_output.txt"  # capture all printed output here
+PLOTS_DIR = Path("plots&models/EDA")
 SHOW_PLOTS = False  # keep headless to avoid blocking on many plot windows
 
 
@@ -34,6 +35,7 @@ def main() -> None:
     DATA_PATH = next((p for p in DATA_CANDIDATES if p.exists()), None)
     if DATA_PATH is None:
         raise SystemExit(f"No input dataset found. Checked: {DATA_CANDIDATES}")
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Buffer stdout so the same text goes both to console and to file at the end.
     buffer = io.StringIO()
@@ -42,6 +44,13 @@ def main() -> None:
         """Print to console and capture in buffer for writing to disk."""
         print(*args, **kwargs)
         print(*args, **kwargs, file=buffer)
+
+    def save_fig(filename: str, dpi: int = 300) -> None:
+        """Save current matplotlib figure to PLOTS_DIR and log the path."""
+        path = PLOTS_DIR / filename
+        plt.tight_layout()
+        plt.savefig(path, dpi=dpi, bbox_inches="tight")
+        log(f"Saved figure → {path}")
 
     try:
         # Load the dataset
@@ -114,6 +123,25 @@ def main() -> None:
             log("=== room_type value counts ===")
             log(df["room_type"].value_counts(dropna=False))
             log()
+
+        # Bookings per city (counts) + PNG export for the report
+        if "City" in df.columns:
+            city_counts = df["City"].value_counts(dropna=False).sort_values(ascending=False)
+            log("=== Bookings per City ===")
+            log(city_counts, "\n")
+
+            top_n = min(len(city_counts), 20)
+            plt.figure(figsize=(10, 6))
+            sns.barplot(x=city_counts.head(top_n).index, y=city_counts.head(top_n).values)
+            plt.title(f"Bookings per City (top {top_n})")
+            plt.xlabel("City")
+            plt.ylabel("Bookings")
+            plt.xticks(rotation=45, ha="right")
+            save_fig("bookings_per_city.png")
+            plt.close()
+            log()
+        else:
+            log("City column missing; skipping bookings-per-city plot.\n")
 
         # Value counts for selected discrete columns
         discrete_cols = ["bedrooms", "person_capacity", "biz", "multi"]
@@ -194,6 +222,8 @@ def main() -> None:
             plt.xlabel("City")
             plt.ylabel(REVENUE_COL)
             plt.xticks(rotation=45, ha="right")
+            save_fig("revenue_by_city_daytype_box.png")
+            plt.close()
 
             # Scatterplots to relate crime/safety metrics with revenue, colored by DayType
             plt.figure()
@@ -207,6 +237,8 @@ def main() -> None:
             plt.title(f"{REVENUE_COL} vs Crime Index by DayType")
             plt.xlabel("Crime Index")
             plt.ylabel(REVENUE_COL)
+            save_fig("revenue_vs_crime_index.png")
+            plt.close()
 
             plt.figure()
             sns.scatterplot(
@@ -219,6 +251,8 @@ def main() -> None:
             plt.title(f"{REVENUE_COL} vs Safety Index by DayType")
             plt.xlabel("Safety Index")
             plt.ylabel(REVENUE_COL)
+            save_fig("revenue_vs_safety_index.png")
+            plt.close()
 
         # --- Visualizations ---
 
@@ -229,6 +263,8 @@ def main() -> None:
             plt.title(f"Histogram: {col}")
             plt.xlabel(col)
             plt.ylabel("Count")
+            save_fig(f"hist_{col}.png")
+            plt.close()
 
         # Bar plots for categorical variables (skip if too many categories to avoid clutter)
         for col in categorical_cols:
@@ -241,6 +277,8 @@ def main() -> None:
                 plt.xlabel(col)
                 plt.ylabel("Count")
                 plt.xticks(rotation=45, ha="right")
+                save_fig(f"bar_{col}.png")
+                plt.close()
             else:
                 log(f"Skipping bar plot for {col} (high cardinality: {unique_vals})")
 
@@ -250,6 +288,8 @@ def main() -> None:
             corr = df[numeric_cols].corr()
             sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", center=0)
             plt.title("Correlation Heatmap (numeric features)")
+            save_fig("correlation_heatmap.png")
+            plt.close()
 
         # Boxplots for outlier detection on top-variance numeric columns
         if numeric_cols:
@@ -261,6 +301,8 @@ def main() -> None:
                 sns.boxplot(x=df[col])
                 plt.title(f"Boxplot: {col}")
                 plt.xlabel(col)
+                save_fig(f"boxplot_{col}.png")
+                plt.close()
 
         # --- Supervised learning relationships (only if a target column is defined) ---
         if TARGET_COL and TARGET_COL in df.columns:
@@ -281,6 +323,8 @@ def main() -> None:
                     plt.title(f"{col} vs {TARGET_COL}")
                     plt.xlabel(col)
                     plt.ylabel(TARGET_COL)
+                    save_fig(f"scatter_{col}_vs_{TARGET_COL}.png")
+                    plt.close()
 
             # Boxplots of numeric features grouped by categorical target for separation insight
             if TARGET_COL in categorical_cols:
@@ -290,6 +334,8 @@ def main() -> None:
                     plt.title(f"{col} by {TARGET_COL}")
                     plt.xlabel(TARGET_COL)
                     plt.ylabel(col)
+                    save_fig(f"box_{col}_by_{TARGET_COL}.png")
+                    plt.close()
 
             # Count plots for categorical features grouped by target to view class balance shifts
             if TARGET_COL in categorical_cols:
@@ -300,6 +346,8 @@ def main() -> None:
                     sns.countplot(data=df, x=col, hue=TARGET_COL)
                     plt.title(f"{col} distribution by {TARGET_COL}")
                     plt.xticks(rotation=45, ha="right")
+                    save_fig(f"count_{col}_by_{TARGET_COL}.png")
+                    plt.close()
         else:
             log("No supervised target set; set TARGET_COL to enable target-based analyses.\n")
 
