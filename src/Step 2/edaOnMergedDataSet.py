@@ -52,6 +52,19 @@ def main() -> None:
         plt.savefig(path, dpi=dpi, bbox_inches="tight")
         log(f"Saved figure → {path}")
 
+    def annotate_bars(ax, fmt: str = "{:,.0f}", fontsize: int = 8) -> None:
+        """Annotate all bars in a barplot/countplot with their heights."""
+        for patch in ax.patches:
+            height = patch.get_height()
+            ax.text(
+                patch.get_x() + patch.get_width() / 2,
+                height,
+                fmt.format(height),
+                ha="center",
+                va="bottom",
+                fontsize=fontsize,
+            )
+
     try:
         # Load the dataset
         df = pd.read_csv(DATA_PATH)
@@ -138,9 +151,7 @@ def main() -> None:
             plt.xlabel("City")
             plt.ylabel("Bookings")
             plt.xticks(rotation=45, ha="right")
-            # Add count labels on bars
-            for i, v in enumerate(top_counts.values):
-                ax.text(i, v, f"{v:,}", ha="center", va="bottom", fontsize=8)
+            annotate_bars(ax)
             save_fig("bookings_per_city.png")
             plt.close()
             log()
@@ -276,11 +287,12 @@ def main() -> None:
             if unique_vals <= 20:
                 plt.figure()
                 counts = df[col].value_counts(dropna=False)
-                sns.barplot(x=counts.index, y=counts.values)
+                ax = sns.barplot(x=counts.index, y=counts.values)
                 plt.title(f"Bar Plot: {col}")
                 plt.xlabel(col)
                 plt.ylabel("Count")
                 plt.xticks(rotation=45, ha="right")
+                annotate_bars(ax)
                 save_fig(f"bar_{col}.png")
                 plt.close()
             else:
@@ -347,9 +359,10 @@ def main() -> None:
                     if col == TARGET_COL:
                         continue
                     plt.figure()
-                    sns.countplot(data=df, x=col, hue=TARGET_COL)
+                    ax = sns.countplot(data=df, x=col, hue=TARGET_COL)
                     plt.title(f"{col} distribution by {TARGET_COL}")
                     plt.xticks(rotation=45, ha="right")
+                    annotate_bars(ax)
                     save_fig(f"count_{col}_by_{TARGET_COL}.png")
                     plt.close()
         else:
