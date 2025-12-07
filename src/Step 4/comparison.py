@@ -361,6 +361,34 @@ def main() -> None:
     fig.savefig(PLOTS_DIR / "rmse_comparison_variants.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
+    # Benchmark-Plot: durchschnittlicher RMSE pro Variant (Outliers/FE-Szenarien)
+    benchmark_rmse = (
+        results_df.groupby("Variant")["RMSE"]
+        .mean()
+        .sort_values()
+    )
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(benchmark_rmse.index, benchmark_rmse.values)
+    ax.set_title("Benchmark: Average RMSE by Variant")
+    ax.set_ylabel("Average RMSE")
+    ax.set_xlabel("Variant")
+    ax.set_xticklabels(benchmark_rmse.index, rotation=45)
+
+    # Kleine Wertebeschriftung auf den Balken, damit es im Report klar lesbar ist
+    for i, (variant, rmse_val) in enumerate(benchmark_rmse.items()):
+        ax.text(
+            i,
+            rmse_val,
+            f"{rmse_val:.1f}",
+            ha="center",
+            va="bottom",
+        )
+
+    plt.tight_layout()
+    fig.savefig(PLOTS_DIR / "benchmark_rmse_by_variant.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
 
 if __name__ == "__main__":
     main()

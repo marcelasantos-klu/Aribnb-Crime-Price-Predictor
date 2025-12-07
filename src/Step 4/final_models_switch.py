@@ -1,14 +1,11 @@
 """
-Train, evaluate, visualize, and save regression models for Airbnb price prediction
-with correct city-aware splitting, log-target training, and raw-scale evaluation.
+Train Airbnb price models with optional outlier removal and configurable splits.
 
-Changes vs. old version:
-- Clean separation of y_log and y_raw in the split.
-- Stratified train/test split by city.
-- Clear titles in plots (raw-scale).
-- Added per-city performance evaluation.
-- Removed confusing index-alignment hack.
-- Improved documentation.
+This module combines the functionality of the previous two scripts:
+- Prompt (or CLI flag) to choose whether outliers (IQR on target) are removed.
+- Prompt (or CLI flag) to choose the train/test split strategy.
+Outputs go to the corresponding subfolder under plots&models/WithOutliers or
+plots&models/WithoutOutliers.
 """
 
 from __future__ import annotations
@@ -17,7 +14,7 @@ import argparse
 import ctypes
 import os
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import joblib
 import matplotlib.pyplot as plt
@@ -43,19 +40,17 @@ from sklearn.ensemble import RandomForestRegressor
 
 DATA_PATH = Path("data/FinalFile/FinalDataSet_geo_merged.csv")
 RANDOM_STATE = 42
-PLOTS_DIR = Path("plots&models/WithoutOutliers/plots")
-MODELS_DIR = Path("plots&models/WithoutOutliers/models")
-# Add more split options here; switch SPLIT_STRATEGY to pick one.
+OUTLIER_FOLDERS = {
+    False: {"plots": Path("plots&models/WithOutliers/plots"), "models": Path("plots&models/WithOutliers/models")},
+    True: {"plots": Path("plots&models/WithoutOutliers/plots"), "models": Path("plots&models/WithoutOutliers/models")},
+}
+# Add more split options here; switch via prompt or --split.
 SPLIT_STRATEGIES = {
-    # Current default: 80/20 split, stratified by city
     "city_stratified_80_20_seed42": {"test_size": 0.2, "random_state": 42, "stratify_by_city": True},
-    # More conservative hold-out for broader testing
     "city_stratified_70_30_seed42": {"test_size": 0.3, "random_state": 42, "stratify_by_city": True},
-    # Same 80/20 but different seed to check stability
     "city_stratified_80_20_seed99": {"test_size": 0.2, "random_state": 99, "stratify_by_city": True},
 }
 DEFAULT_SPLIT_STRATEGY = "city_stratified_80_20_seed42"
-SPLIT_STRATEGY = DEFAULT_SPLIT_STRATEGY
 
 
 # ===============================================================
@@ -63,6 +58,16 @@ SPLIT_STRATEGY = DEFAULT_SPLIT_STRATEGY
 # ===============================================================
 
 def load_libomp_if_available() -> None:
+    """Try to load the libomp runtime on macOS to avoid LightGBM/XGBoost errors.
+
+    XGBoost and LightGBM depend on OpenMP (libomp) for multi-threading. On macOS
+    this library is sometimes not on the default search path, which can lead to
+    runtime import errors. This helper attempts to load libomp from a few common
+    installation locations and sets the corresponding environment variables so
+    the native libraries of the gradient-boosting frameworks can be initialized
+    correctly. If nothing can be loaded, the script still runs, but some models
+    may fail at import or fall back to single-threaded execution.
+    """
     candidates = [
         Path("/opt/homebrew/opt/libomp/lib/libomp.dylib"),
         Path("/usr/local/opt/libomp/lib/libomp.dylib"),
@@ -78,7 +83,6 @@ def load_libomp_if_available() -> None:
                 return
             except OSError:
                 pass
-
     print("Warning: libomp not found. LightGBM may fail on macOS.")
 
 
@@ -87,41 +91,49 @@ def load_libomp_if_available() -> None:
 # ===============================================================
 
 def load_data() -> pd.DataFrame:
+    """Load the premerged Airbnb dataset and apply basic column cleanup.
+
+    The function reads the FinalDataSet_geo_merged.csv file, normalizes the
+    crime column name to `Crime_Index` (so the rest of the code can rely on a
+    consistent identifier) and drops the synthetic `geo_id` column that was
+    only used for grouping. All further preprocessing and feature engineering
+    builds on the DataFrame returned here.
+    """
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"{DATA_PATH} not found.")
 
     df = pd.read_csv(DATA_PATH)
-    df = df.rename(columns={
-        "Crime Index": "Crime_Index",
-    })
+    df = df.rename(columns={"Crime Index": "Crime_Index"})
     df = df.drop(columns=["geo_id"], errors="ignore")
     return df
 
 
 def prompt_split_strategy(default: str = DEFAULT_SPLIT_STRATEGY) -> str:
-    """
-    Interactively ask the user to choose a train/test split strategy at runtime.
+    """Interactively ask the user which train/test split configuration to use.
 
     The available options are taken from the global SPLIT_STRATEGIES dictionary.
-    The function prints a numbered list of all keys and lets the user either:
+    Each option specifies the test size, the random seed and whether the split
+    is stratified by city. This prompt is only used when no `--split` argument
+    is provided on the command line.
 
-    - enter a number (1..N) corresponding to a listed strategy, or
+    The user can either:
+    - enter a number (1..N) corresponding to one of the printed strategies,
     - type the strategy name directly, or
-    - press ENTER to accept the provided default.
+    - press ENTER to accept the default value.
 
-    If the input is invalid or cannot be parsed, the default strategy is used.
+    Invalid input falls back to the given default so that the script always has
+    a valid and reproducible split configuration.
 
     Parameters
     ----------
-    default : str, optional
-        The strategy key to fall back to when the user presses ENTER or enters
-        an invalid value. Defaults to DEFAULT_SPLIT_STRATEGY.
+    default : str
+        Key of the strategy to use when the user presses ENTER or inputs an
+        invalid value.
 
     Returns
     -------
     str
-        The selected strategy key, guaranteed to be a valid key in
-        SPLIT_STRATEGIES.
+        The chosen split strategy key, guaranteed to exist in SPLIT_STRATEGIES.
     """
     options = list(SPLIT_STRATEGIES.keys())
     print("Select split strategy:")
@@ -136,17 +148,49 @@ def prompt_split_strategy(default: str = DEFAULT_SPLIT_STRATEGY) -> str:
 
     if not user_input:
         return default
-
     if user_input.isdigit():
         choice = int(user_input)
         if 1 <= choice <= len(options):
             return options[choice - 1]
-
     if user_input in SPLIT_STRATEGIES:
         return user_input
 
     print(f"Invalid input '{user_input}', using default {default}")
     return default
+
+
+def prompt_outlier_choice(default_drop: bool = False) -> bool:
+    """Ask the user whether to remove target outliers before training.
+
+    This prompt is used when no explicit `--drop-outliers` flag is passed on the
+    command line. It controls whether the IQR-based filter on the target column
+    `realSum` is applied. Removing extreme price outliers makes the models more
+    stable and leads to a more meaningful evaluation of typical listings.
+
+    Parameters
+    ----------
+    default_drop : bool
+        If True, pressing ENTER will enable outlier removal; if False, pressing
+        ENTER will keep outliers.
+
+    Returns
+    -------
+    bool
+        True if outliers should be removed, False otherwise.
+    """
+    prompt = f"Remove outliers with IQR filter? [y/N] (default {'yes' if default_drop else 'no'}): "
+    try:
+        user_input = input(prompt).strip().lower()
+    except EOFError:
+        user_input = ""
+    if not user_input:
+        return default_drop
+    if user_input in {"y", "yes", "1", "true", "t"}:
+        return True
+    if user_input in {"n", "no", "0", "false", "f"}:
+        return False
+    print(f"Invalid input '{user_input}', using default {'remove' if default_drop else 'keep'}")
+    return default_drop
 
 
 def make_train_test_split(
@@ -155,35 +199,33 @@ def make_train_test_split(
     city_series: pd.Series,
     strategy_key: Optional[str] = None,
 ):
-    """
-    Create a train/test split for features and log-transformed targets.
+    """Create a train/test split according to the chosen strategy key.
 
-    The concrete split configuration (test size, random seed, and whether to
-    stratify by city) is taken from the SPLIT_STRATEGIES dictionary. Stratified
-    splitting ensures that the relative city distribution is preserved in the
-    train and test sets, which is important for fair model evaluation when
-    different cities have very different price levels.
+    All split configurations are defined in SPLIT_STRATEGIES and specify
+    test-size, random seed and whether the split should be stratified by city.
+    Stratifying by city ensures that each city is represented in train and
+    test sets with similar proportions, which is important for fair evaluation
+    when price levels differ strongly between cities.
 
     Parameters
     ----------
     X : pd.DataFrame
-        Feature matrix containing all predictors except the target.
+        Feature matrix used for training and testing.
     y_log : pd.Series
-        Log-transformed target variable (log1p(realSum)).
+        Log-transformed target values (log1p(realSum)).
     city_series : pd.Series
-        City labels corresponding to each row in X/y_log. Used for stratification
-        when the chosen strategy requires it.
+        City labels corresponding to each row; used for stratification when the
+        chosen strategy enables it.
     strategy_key : str, optional
-        Key into SPLIT_STRATEGIES that selects the split configuration.
-        If None, the globally configured SPLIT_STRATEGY is used.
+        Key into SPLIT_STRATEGIES. If None, DEFAULT_SPLIT_STRATEGY is used.
 
     Returns
     -------
     tuple
-        A 4-tuple (X_train, X_test, y_train_log, y_test_log) produced by
+        (X_train, X_test, y_train_log, y_test_log) as returned by
         sklearn.model_selection.train_test_split.
     """
-    key = strategy_key or SPLIT_STRATEGY
+    key = strategy_key or DEFAULT_SPLIT_STRATEGY
     cfg = SPLIT_STRATEGIES.get(key)
     if cfg is None:
         print(f"Unknown split '{key}', falling back to {DEFAULT_SPLIT_STRATEGY}")
@@ -203,6 +245,25 @@ def make_train_test_split(
 # ===============================================================
 
 def build_preprocessor(feature_df: pd.DataFrame) -> ColumnTransformer:
+    """Construct a ColumnTransformer for numeric and categorical features.
+
+    Numeric features are imputed with the median and standardized; categorical
+    features (`room_type`, `City`, `metro_dist_bucket`) are imputed with the
+    most frequent value and one-hot encoded. This preprocessing pipeline is
+    shared across all models so that they are compared on exactly the same
+    transformed feature space.
+
+    Parameters
+    ----------
+    feature_df : pd.DataFrame
+        DataFrame containing all feature columns (without the target).
+
+    Returns
+    -------
+    ColumnTransformer
+        A scikit-learn transformer that can be plugged into a Pipeline before
+        the regressor.
+    """
     categorical_features = ["room_type", "City", "metro_dist_bucket"]
     numeric_features = [c for c in feature_df.columns if c not in categorical_features]
 
@@ -233,6 +294,12 @@ def get_feature_names(preprocessor: ColumnTransformer) -> List[str]:
 # ===============================================================
 
 def eval_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
+    """Compute the main regression metrics on the raw price scale.
+
+    The models are trained on log-transformed targets but evaluated after
+    back-transformation to Euros. We report RMSE, MAE and R², which together
+    capture average error magnitude and explanatory power.
+    """
     return {
         "RMSE": np.sqrt(mean_squared_error(y_true, y_pred)),
         "MAE": mean_absolute_error(y_true, y_pred),
@@ -241,23 +308,22 @@ def eval_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
 
 
 def plot_pred_vs_actual(y_true, y_pred, model_name, out_path):
+    """Scatter plot of predicted vs. actual prices with error coloring.
+
+    Points above the diagonal line represent overpredictions, points below
+    represent underpredictions. Colors (red/green) make this visually
+    distinguishable. This diagnostic helps to see systematic bias and whether
+    the model behaves differently for low vs. high prices.
+    """
     fig, ax = plt.subplots(figsize=(6, 6))
-
-    # Color code: red = overprediction, green = underprediction
     colors = ["red" if yp > yt else "green" for yt, yp in zip(y_true, y_pred)]
-
     ax.scatter(y_true, y_pred, alpha=0.5, s=12, c=colors)
-
-    # Legend: red = overprediction, green = underprediction
     legend_elements = [
         Line2D([0], [0], marker="o", color="none", markerfacecolor="red", markersize=6, label="Overprediction"),
         Line2D([0], [0], marker="o", color="none", markerfacecolor="green", markersize=6, label="Underprediction"),
     ]
     ax.legend(handles=legend_elements, loc="upper left", title="Error type")
-
     lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
-
-    # Diagonal reference line
     ax.plot(lims, lims, "--", color="black", linewidth=1)
     ax.set_xlim(lims)
     ax.set_ylim(lims)
@@ -270,6 +336,19 @@ def plot_pred_vs_actual(y_true, y_pred, model_name, out_path):
 
 
 def plot_residuals(y_true, y_pred, model_name, out_path):
+    """Plot a histogram of residuals (actual - predicted) on the raw scale.
+
+    A roughly symmetric, centered distribution around zero indicates that the
+    model is reasonably well calibrated. Strong skewness or heavy tails point
+    to systematic under- or overestimation for certain price ranges.
+
+    In the context of this project, these residual plots are meant to be used
+    directly in the report or presentation. They visually show how large the
+    typical prediction errors are and whether the model systematically under-
+    or overestimates certain listings. After removing extreme outliers, the
+    residual distribution should become more concentrated around zero with
+    fewer very large errors, which is exactly what we want to demonstrate.
+    """
     residuals = y_true - y_pred
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.hist(residuals, bins=40, alpha=0.8)
@@ -282,6 +361,12 @@ def plot_residuals(y_true, y_pred, model_name, out_path):
 
 
 def plot_feature_importance(df: pd.DataFrame, model_name: str, out_path: Path):
+    """Visualize the top feature importances for tree-based models.
+
+    The input DataFrame is expected to contain `feature` and `importance`
+    columns. This plot makes it easy to explain which variables drive the
+    model's predictions and to relate them back to the business context.
+    """
     fig, ax = plt.subplots(figsize=(8, 6))
     df_sorted = df.sort_values("importance")
     ax.barh(df_sorted["feature"], df_sorted["importance"])
@@ -292,6 +377,13 @@ def plot_feature_importance(df: pd.DataFrame, model_name: str, out_path: Path):
 
 
 def feature_importance_df(pipeline: Pipeline, top_n: int = 10):
+    """Extract top-n feature importances from a fitted pipeline, if available.
+
+    Only tree-based models such as RandomForest, XGBoost, LightGBM and CatBoost
+    expose a `feature_importances_` attribute. For linear models this function
+    returns None. Feature names are taken from the preprocessor so that the
+    importances can be matched back to human-readable input variables.
+    """
     reg = pipeline.named_steps["regressor"]
     if not hasattr(reg, "feature_importances_"):
         return None
@@ -306,11 +398,33 @@ def feature_importance_df(pipeline: Pipeline, top_n: int = 10):
 # ===============================================================
 
 def remove_outliers_iqr(df: pd.DataFrame, col: str = "realSum", k: float = 1.5) -> pd.DataFrame:
-    """
-    Remove outliers from the DataFrame based on the IQR rule for a single column.
+    """Remove target outliers using the IQR rule.
 
-    Rows with values outside [Q1 - k*IQR, Q3 + k*IQR] are dropped.
-    Default k=1.5 corresponds to the standard Tukey rule.
+    Outliers are defined as values below Q1 - k * IQR or above Q3 + k * IQR,
+    where Q1 and Q3 are the first and third quartiles of the chosen column.
+    For this project we apply the filter to `realSum` to reduce the influence
+    of extremely expensive or extremely cheap listings that would otherwise
+    distort the error metrics and the model fit.
+
+    The function also prints how many rows are removed and what percentage of
+    the dataset this corresponds to. These statistics are useful when writing
+    the report or slides: you can directly quote how many observations were
+    dropped as outliers and argue that the remaining data better reflects the
+    typical price range in the market.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame containing the target column.
+    col : str
+        Name of the column on which to compute the IQR-based bounds.
+    k : float
+        Multiplier for the IQR (1.5 is the classical Tukey rule).
+
+    Returns
+    -------
+    pd.DataFrame
+        A copy of the DataFrame with outliers removed and index reset.
     """
     if col not in df.columns:
         raise KeyError(f"Column '{col}' not found in DataFrame for outlier removal.")
@@ -337,14 +451,45 @@ def remove_outliers_iqr(df: pd.DataFrame, col: str = "realSum", k: float = 1.5) 
 # MAIN
 # ===============================================================
 
-def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -> None:
+def main(split_strategy: Optional[str], drop_outliers: Optional[bool], prompt_for_split: bool, prompt_for_outliers: bool) -> None:
+    """End-to-end entry point: load data, preprocess, train and evaluate models.
+
+    This function ties together all steps of the project pipeline:
+    - optional outlier removal via IQR on the price target,
+    - feature engineering for space, distance and safety related signals,
+    - configurable train/test split (including city-stratified setups),
+    - shared preprocessing (imputation, scaling, one-hot encoding),
+    - training multiple regression models on the log-transformed target,
+    - back-transformation to Euros and evaluation with RMSE/MAE/R²,
+    - creation of plots and model artifacts for documentation and reporting.
+
+    The behavior can be controlled via command-line flags or interactive
+    prompts, which makes the script usable both in automated runs and
+    interactive exploration.
+    """
     load_libomp_if_available()
     from lightgbm import LGBMRegressor
     from catboost import CatBoostRegressor
     from xgboost import XGBRegressor
 
+    # Choices via prompt if not provided
+    if prompt_for_outliers and drop_outliers is None:
+        drop_outliers = prompt_outlier_choice()
+    drop_outliers = bool(drop_outliers) if drop_outliers is not None else False
+
+    if prompt_for_split and not split_strategy:
+        split_strategy = prompt_split_strategy()
+    split_strategy = split_strategy or DEFAULT_SPLIT_STRATEGY
+
+    folders = OUTLIER_FOLDERS[drop_outliers]
+    PLOTS_DIR = folders["plots"]
+    MODELS_DIR = folders["models"]
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
     df = load_data()
-    df = remove_outliers_iqr(df, col="realSum", k=1.5)
+    if drop_outliers:
+        df = remove_outliers_iqr(df, col="realSum", k=1.5)
 
     # -------- Feature engineering on existing columns --------
     df["beds_per_person"] = (df["bedrooms"] / df["person_capacity"]).replace([np.inf, -np.inf], np.nan)
@@ -359,7 +504,6 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
     else:
         df["net_safety_score"] = -df["Crime_Index"]
 
-    # Robust encoding of host_is_superhost (string / boolean / numeric variants)
     super_raw = df["host_is_superhost"].astype(str).str.strip().str.lower()
     super_map = {"t": 1, "true": 1, "y": 1, "yes": 1, "1": 1}
     df["host_is_superhost"] = super_raw.map(super_map).fillna(0).astype(int)
@@ -380,16 +524,12 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
     X = df.drop(columns=["realSum"])
 
     # Train/Test split (configurable)
-    selected_split = split_strategy
-    if prompt_for_split and not selected_split:
-        selected_split = prompt_split_strategy()
-    selected_split = selected_split or SPLIT_STRATEGY
-    print(f"Split strategy: {selected_split}")
+    print(f"Split strategy: {split_strategy}")
+    print(f"Outlier removal: {'ON (IQR 1.5)' if drop_outliers else 'OFF'}")
     X_train, X_test, y_train_log, y_test_log = make_train_test_split(
-        X, y_log, df["City"], strategy_key=selected_split
+        X, y_log, df["City"], strategy_key=split_strategy
     )
 
-    # Raw-scale targets for evaluation
     y_train_raw = np.expm1(y_train_log)
     y_test_raw = np.expm1(y_test_log)
 
@@ -398,7 +538,6 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
     print(f"Loaded {len(df):,} rows.")
     print(f"Train: {len(X_train):,}, Test: {len(X_test):,}")
 
-    # MODELS
     model_factories = {
         "Linear Regression": lambda: LinearRegression(),
         "Decision Tree": lambda: DecisionTreeRegressor(max_depth=12, random_state=RANDOM_STATE),
@@ -436,9 +575,6 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
         ),
     }
 
-    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
     results = []
     all_city_scores: Dict[str, pd.DataFrame] = {}
 
@@ -451,41 +587,32 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
             ("regressor", reg),
         ])
 
-        # Train (log target)
         pipe.fit(X_train, y_train_log)
 
-        # Predict → log → raw
         preds_log = pipe.predict(X_test)
         # Clip predictions in log-space to avoid exploding or negative raw prices.
-        # Lower bound 0 → expm1(0) = 0 Euro, upper bound 20 → ~4.85 million Euro.
+        # Lower bound 0 → expm1(0) = 0 Euro, upper bound 20 ≈ 4.85 million Euro.
         preds_log = np.clip(preds_log, 0, 20)
         preds_raw = np.expm1(preds_log)
 
-        # Metrics (raw scale)
         metrics = eval_metrics(y_test_raw, preds_raw)
         results.append({"Model": model_name, **metrics})
 
-        # Save model
         model_path = MODELS_DIR / f"model_{model_name.replace(' ', '_').lower()}.pkl"
         joblib.dump(pipe, model_path)
         print(f"Saved model → {model_path}")
 
-        # Plots
         plot_pred_vs_actual(y_test_raw, preds_raw, model_name,
                             PLOTS_DIR / f"pred_vs_actual_{model_name.replace(' ', '_').lower()}.png")
         plot_residuals(y_test_raw, preds_raw, model_name,
                        PLOTS_DIR / f"residuals_{model_name.replace(' ', '_').lower()}.png")
 
-        # Feature Importances
         fi = feature_importance_df(pipe, top_n=10)
         if fi is not None:
             fi_path = PLOTS_DIR / f"feature_importance_{model_name.replace(' ', '_').lower()}.png"
             plot_feature_importance(fi, model_name, fi_path)
             print(f"Top 10 Features for {model_name}:\n{fi}")
 
-        # ---------------------------------
-        # PER-CITY EVALUATION
-        # ---------------------------------
         test_df = X_test.copy()
         test_df["y_true"] = y_test_raw
         test_df["y_pred"] = preds_raw
@@ -508,7 +635,6 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
         all_city_scores[model_name] = city_scores
 
         if model_name == "Decision Tree":
-            # Plot a visual representation of the trained decision tree (limited depth for readability)
             fig, ax = plt.subplots(figsize=(20, 10))
             feature_names = get_feature_names(pipe.named_steps["preprocessor"])
             plot_tree(
@@ -523,16 +649,10 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
             plt.close(fig)
             print(f"Saved decision tree visualization → {tree_path}")
 
-    # FINAL RESULTS
     results_df = pd.DataFrame(results).sort_values("RMSE").reset_index(drop=True)
     print("\n=== FINAL MODEL PERFORMANCE (RAW SCALE) ===")
     print(results_df)
 
-    # -------------------------------------------------
-    # ADDITIONAL PERFORMANCE PLOTS FOR THE REPORT
-    # -------------------------------------------------
-
-    # 1) Bar charts for RMSE, MAE, and R2 per model
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 
     results_df.plot(x="Model", y="RMSE", kind="bar", ax=axes[0], legend=False)
@@ -556,7 +676,6 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
     plt.close(fig)
     print(f"Saved overall model comparison plot → {overall_path}")
 
-    # 2) Heatmap of R2 per City and Model (if per-city scores are available)
     if all_city_scores:
         r2_frames = []
         for model_name, scores in all_city_scores.items():
@@ -587,11 +706,28 @@ def main(split_strategy: Optional[str] = None, prompt_for_split: bool = False) -
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train Airbnb price models (no outliers).")
+    parser = argparse.ArgumentParser(description="Train Airbnb price models with optional outlier removal.")
     parser.add_argument(
         "--split",
         choices=list(SPLIT_STRATEGIES.keys()),
         help="Choose the train/test split strategy.",
     )
+    parser.add_argument(
+        "--drop-outliers",
+        choices=["yes", "no"],
+        help="Remove target outliers using IQR rule before training.",
+    )
     args = parser.parse_args()
-    main(split_strategy=args.split, prompt_for_split=args.split is None)
+
+    drop_flag = None
+    if args.drop_outliers == "yes":
+        drop_flag = True
+    elif args.drop_outliers == "no":
+        drop_flag = False
+
+    main(
+        split_strategy=args.split,
+        drop_outliers=drop_flag,
+        prompt_for_split=args.split is None,
+        prompt_for_outliers=args.drop_outliers is None,
+    )
