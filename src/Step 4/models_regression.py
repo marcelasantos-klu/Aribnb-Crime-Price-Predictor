@@ -244,7 +244,7 @@ def train_for_split(
         X_raw_full, y_log_full, X_raw_full["City"], strategy_key=split_strategy
     )
 
-    # Optional: remove outliers from TRAIN only based on TRAIN IQR bounds.
+    # Optional: compute IQR on TRAIN and remove outliers from TRAIN; apply same bounds to TEST.
     if drop_outliers:
         y_train_raw_tmp = pd.Series(np.expm1(y_train_log))
         q1 = y_train_raw_tmp.quantile(0.25)
@@ -260,6 +260,17 @@ def train_for_split(
         )
         X_train_raw = X_train_raw.loc[mask.values].reset_index(drop=True)
         y_train_log = pd.Series(y_train_log).loc[mask.values].reset_index(drop=True)
+
+        # Apply the same train-derived bounds to TEST to drop extreme values there as well.
+        y_test_raw_tmp = pd.Series(np.expm1(y_test_log))
+        mask_test = y_test_raw_tmp.between(lower, upper)
+        removed_test = int((~mask_test).sum())
+        X_test_raw = X_test_raw.loc[mask_test.values].reset_index(drop=True)
+        y_test_log = pd.Series(y_test_log).loc[mask_test.values].reset_index(drop=True)
+        print(
+            f"Applied train IQR bounds to TEST: removed {removed_test} of {len(mask_test)} test rows "
+            f"({removed_test / len(mask_test) * 100:.2f}%)."
+        )
 
     fe_params = compute_fe_params(X_train_raw)
     X_train = _feature_engineering_for_ml(X_train_raw, fe_params=fe_params)
@@ -381,7 +392,16 @@ def train_for_split(
     plt.close(fig)
     print(f"Saved RMSE-by-bucket plot → {bucket_path}")
 
-    results = []
+    # Include the city-mean baseline in the comparison table/plot (train metrics not applicable).
+    results = [
+        {
+            "Model": baseline_name,
+            **baseline_metrics,
+            "Train_RMSE": np.nan,
+            "Train_MAE": np.nan,
+            "Train_R2": np.nan,
+        }
+    ]
     all_city_scores: Dict[str, pd.DataFrame] = {}
     best_rmse = float("inf")
     best_model_name = None
@@ -525,6 +545,7 @@ def train_for_split(
 
     # Horizontal comparison plot to keep long model names readable.
     display_name = {
+        "City-mean Baseline": "Baseline",
         "Random Forest (200 trees)": "RF 200",
         "Random Forest (500 trees)": "RF 500",
         "Decision Tree (depth=6)": "DT d=6",
