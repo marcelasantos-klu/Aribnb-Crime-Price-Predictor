@@ -17,11 +17,6 @@ What gets produced (in the provided `plots_dir` / `models_dir`):
 - Per-city score CSVs and plots (MAE by city, RMSE by revenue bucket) per model.
 - Diagnostics per model: predicted-vs-actual and residual histogram.
 - Model artifacts: one joblib `.pkl` per model.
-- Interpretability add-ons for the best model:
-    * **Crime ablation** (with vs. without Crime/Safety features) written to
-      `crime_ablation_metrics.csv`.
-    * **PDP for Crime_Index** saved as `pdp_crime_index.png` (note: PDP is shown on the
-      model’s log-output scale).
 
 Note: The goal is predictive modelling. Any “crime effect” interpretation is descriptive
 of the trained model and must not be presented as causal.
@@ -45,11 +40,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeRegressor, plot_tree
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.inspection import PartialDependenceDisplay
 
 from config import RANDOM_STATE
 from data_io import make_train_test_split
-from features import compute_fe_params, _feature_engineering_for_ml, remove_outliers_iqr, safe_r2
+from features import compute_fe_params, _feature_engineering_for_ml, safe_r2
 
 
 def build_preprocessor(feature_df: pd.DataFrame) -> ColumnTransformer:
@@ -403,10 +397,6 @@ def train_for_split(
         }
     ]
     all_city_scores: Dict[str, pd.DataFrame] = {}
-    best_rmse = float("inf")
-    best_model_name = None
-    best_pipe = None
-    best_city_scores = None
 
     for model_name, factory in model_factories.items():
         print(f"\n--- Training {model_name} ---")
@@ -530,12 +520,6 @@ def train_for_split(
             plt.close(fig)
             print(f"Saved decision tree visualization → {tree_path}")
 
-        if metrics["RMSE"] < best_rmse:
-            best_rmse = metrics["RMSE"]
-            best_model_name = model_name
-            best_pipe = pipe
-            best_city_scores = city_scores.copy()
-
     results_df = pd.DataFrame(results).sort_values("RMSE").reset_index(drop=True)
     print("\n=== FINAL MODEL PERFORMANCE (RAW SCALE) ===")
     print(results_df)
@@ -583,104 +567,6 @@ def train_for_split(
     plt.close(fig)
     print(f"Saved overall model comparison plot → {overall_path}")
 
-    # -----------------------------
-    # Crime ablation (with vs. without Crime/Safety columns) for best model
-    # -----------------------------
-    if best_model_name is not None:
-        crime_cols = [c for c in X_train_raw.columns if c in ["Crime_Index", "Safety_Index"]]
-        base_row = results_df[results_df["Model"] == best_model_name].iloc[0].to_dict()
-        base_mae_city_mean = float(best_city_scores["MAE"].mean()) if best_city_scores is not None else np.nan
-        base_r2_city_mean = float(best_city_scores["R2"].mean()) if best_city_scores is not None else np.nan
-
-        ablation_rows = []
-        ablation_rows.append(
-            {
-                "Model": best_model_name,
-                "Variant": "with_crime",
-                "RMSE": base_row["RMSE"],
-                "MAE": base_row["MAE"],
-                "R2": base_row["R2"],
-                "MAE_city_mean": base_mae_city_mean,
-                "R2_city_mean": base_r2_city_mean,
-            }
-        )
-
-        # Train same model without Crime/Safety columns
-        X_train_raw_no = X_train_raw.drop(columns=crime_cols, errors="ignore")
-        X_test_raw_no = X_test_raw.drop(columns=crime_cols, errors="ignore")
-        fe_params_no = compute_fe_params(X_train_raw_no)
-        X_train_no = _feature_engineering_for_ml(X_train_raw_no, fe_params=fe_params_no)
-        X_test_no = _feature_engineering_for_ml(X_test_raw_no, fe_params=fe_params_no)
-        preprocessor_no = build_preprocessor(X_train_no)
-        reg_no = model_factories[best_model_name]()
-        pipe_no = Pipeline(
-            [
-                ("preprocessor", preprocessor_no),
-                ("regressor", reg_no),
-            ]
-        )
-        pipe_no.fit(X_train_no, y_train_log)
-        preds_no = pipe_no.predict(X_test_no)
-        preds_no_raw = np.clip(np.expm1(preds_no), 0, None)
-        metrics_no = eval_metrics(y_test_raw, preds_no_raw)
-
-        test_df_no = X_test_no.copy()
-        test_df_no["y_true"] = y_test_raw
-        test_df_no["y_pred"] = preds_no_raw
-        city_scores_no = (
-            test_df_no.groupby("City")
-            .apply(
-                lambda g: pd.Series({
-                    "MAE": mean_absolute_error(g["y_true"], g["y_pred"]),
-                    "RMSE": np.sqrt(mean_squared_error(g["y_true"], g["y_pred"])),
-                    "R2": safe_r2(g["y_true"].to_numpy(), g["y_pred"].to_numpy()),
-                }),
-                include_groups=False,
-            )
-        )
-
-        ablation_rows.append(
-            {
-                "Model": best_model_name,
-                "Variant": "no_crime",
-                "RMSE": metrics_no["RMSE"],
-                "MAE": metrics_no["MAE"],
-                "R2": metrics_no["R2"],
-                "MAE_city_mean": float(city_scores_no["MAE"].mean()),
-                "R2_city_mean": float(city_scores_no["R2"].mean()),
-            }
-        )
-
-        ablation_df = pd.DataFrame(ablation_rows)
-        delta_df = pd.DataFrame(
-            [{
-                "Model": best_model_name,
-                "Delta_RMSE": metrics_no["RMSE"] - base_row["RMSE"],
-                "Delta_R2": metrics_no["R2"] - base_row["R2"],
-                "Delta_MAE_city_mean": float(city_scores_no["MAE"].mean()) - base_mae_city_mean,
-                "Delta_R2_city_mean": float(city_scores_no["R2"].mean()) - base_r2_city_mean,
-            }]
-        )
-        ablation_out = plots_dir / "crime_ablation_metrics.csv"
-        pd.concat([ablation_df, delta_df], ignore_index=True).to_csv(ablation_out, index=False)
-        print(f"Saved crime ablation metrics → {ablation_out}")
-
-        # PDP for Crime_Index (only generated when `drop_outliers` is True and the feature exists; PDP is on log-output scale)
-        if drop_outliers and "Crime_Index" in X_train.columns:
-            sample_for_pdp = X_train.sample(min(len(X_train), 5000), random_state=RANDOM_STATE)
-            fig, ax = plt.subplots(figsize=(6, 4))
-            PartialDependenceDisplay.from_estimator(
-                best_pipe,
-                sample_for_pdp,
-                features=["Crime_Index"],
-                ax=ax,
-                kind="average",
-            )
-            ax.set_title(f"PDP for Crime_Index – {best_model_name}")
-            pdp_path = plots_dir / "pdp_crime_index.png"
-            fig.savefig(pdp_path, dpi=300, bbox_inches="tight")
-            plt.close(fig)
-            print(f"Saved PDP for Crime_Index → {pdp_path}")
     if all_city_scores:
         r2_frames = []
         for model_name, scores in all_city_scores.items():
