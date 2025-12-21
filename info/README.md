@@ -4,7 +4,7 @@ Prerequisites: Python 3.9+ and Git installed locally. In VS Code, use the integr
 
 1) Clone the repository  
 ```bash
-git clone https://github.com/<your-account>/Dynamic-Pricing-in-Retail-Fashion-Industry-Data-Science.git
+git clone https://github.com/marcelasantos-klu/Aribnb-Crime-Price-Predictor.git
 cd Dynamic-Pricing-in-Retail-Fashion-Industry-Data-Science
 ```
 
