@@ -2,6 +2,7 @@
 
 Prerequisites: Python 3.9+ and Git installed locally. In VS Code, use the integrated terminal for the commands below and select the created virtual environment as your interpreter (Command Palette → “Python: Select Interpreter”).
 
+
 1) Clone the repository  
 ```bash
 git clone https://github.com/marcelasantos-klu/Aribnb-Crime-Price-Predictor.git
@@ -18,6 +19,8 @@ python -m pip install --upgrade pip
 3) Install dependencies (required for the modelling scripts)  
 ```bash
 python -m pip install -r info/requirements.txt
+# or run the helper from repo root:
+# python dependencies/install_deps.py
 ```
 
 4) Run the full modelling pipeline (regression/classification/clustering)  
@@ -62,8 +65,6 @@ Check the scripts under `src/Step 2/` for EDA and mapping utilities; they expect
   All generated artifacts: metrics CSVs, plots, model pickles, terminal logs. Key files include `training_terminal_output.txt`, regression/classification comparison plots, clustering diagnostics, and per-city metrics.
 
 - `info/`  
-  - `README.md`: this guide.  
-  - `Report.md`: project report (modelling/evaluation narrative).  
   - `requirements.txt`: pinned Python dependencies.
 
 - `src/depricated/`  
