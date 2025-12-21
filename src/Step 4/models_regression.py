@@ -1,25 +1,46 @@
 """Step 4 – Regression modelling & evaluation.
 
-This module trains and evaluates multiple regression models to predict Airbnb booking
-revenue (`realSum`). The target is modelled on a log-scale (`log1p(realSum)`) to reduce
-skew; all reported metrics (RMSE/MAE/R²) are computed on the original Euro scale by
-applying `expm1` to predictions.
+Goal
+----
+Train and evaluate multiple regression models to predict Airbnb booking revenue (`realSum`).
+Regression is the *main task* of the project.
 
-Key design choices (important for the report):
-- **City-stratified split** via `make_train_test_split` to avoid cities dominating the split.
-- **Train-only feature engineering parameters** (`compute_fe_params`) to prevent leakage.
-- **Optional train-only outlier filtering** (IQR rule on TRAIN only) to avoid using any
-  information from the test set.
+Target handling
+---------------
+We train on a log-transformed target to reduce skew:
+- y_train = log1p(realSum)
+During evaluation we convert predictions back to Euro scale:
+- y_pred_eur = expm1(y_pred_log) and clip to >= 0
+All reported metrics (RMSE / MAE / R²) are computed on the *Euro scale*.
 
-What gets produced (in the provided `plots_dir` / `models_dir`):
-- Baseline evaluation (city-mean baseline) + per-city MAE plot.
-- Per-model metrics table (`regression_model_comparison.csv`) and an overall comparison plot.
-- Per-city score CSVs and plots (MAE by city, RMSE by revenue bucket) per model.
+Leakage prevention
+------------------
+- Splitting is handled by `make_train_test_split(...)` (typically city-stratified).
+- Feature-engineering parameters are fitted on TRAIN only via `compute_fe_params(...)`
+  and then applied unchanged to TEST.
+
+Outlier sensitivity
+-------------------
+This module supports an optional IQR-based “typical-case” scope controlled by `drop_outliers`.
+- IQR bounds are computed on TRAIN (after the split).
+- TRAIN is filtered using those bounds.
+- The same TRAIN-derived bounds are also applied to TEST so both sets represent the same scope.
+  (This is intentional for the typical-case evaluation; the unfiltered run still reports full-scope results.)
+
+What gets written to disk
+-------------------------
+Files are written into the provided `plots_dir` and `models_dir`:
+- Baseline (city-mean) metrics and plots.
+- Per-model global metrics table (`regression_model_comparison.csv`) + comparison plot.
+- Per-city metrics (CSV + MAE plot) and RMSE-by-revenue-bucket plot for baseline and each model.
 - Diagnostics per model: predicted-vs-actual and residual histogram.
-- Model artifacts: one joblib `.pkl` per model.
+- Optional feature importance plots for tree-based models.
+- Serialized model pipelines (`.pkl`) for reproducibility.
 
-Note: The goal is predictive modelling. Any “crime effect” interpretation is descriptive
-of the trained model and must not be presented as causal.
+Interpretation warning
+----------------------
+This is predictive modelling. Any association between features (e.g., crime indices) and revenue
+reflects patterns learned by the model and must not be presented as causal.
 """
 from __future__ import annotations
 
@@ -47,7 +68,15 @@ from features import compute_fe_params, _feature_engineering_for_ml, safe_r2
 
 
 def build_preprocessor(feature_df: pd.DataFrame) -> ColumnTransformer:
-    """Build preprocessing pipeline for numeric and categorical features."""
+    """Build the preprocessing transformer used inside each regression pipeline.
+
+    - Numeric features: median imputation + standard scaling.
+    - Categorical features: most-frequent imputation + one-hot encoding.
+
+    We keep preprocessing inside a single `ColumnTransformer` so that every model is trained and
+    evaluated with the exact same feature preparation.
+    """
+    # Define which columns are treated as categorical vs numeric for preprocessing.
     categorical_features = [
         "room_type",
         "City",
@@ -55,18 +84,22 @@ def build_preprocessor(feature_df: pd.DataFrame) -> ColumnTransformer:
         "distance_bucket",
         "guest_satisfaction_bucket",
     ]
+    # Everything not listed as categorical is treated as numeric.
     numeric_features = [c for c in feature_df.columns if c not in categorical_features]
 
+    # Numeric pipeline: impute missing values and scale for models sensitive to feature magnitude.
     num_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
     ])
 
+    # Categorical pipeline: impute and one-hot encode; unknown categories in TEST are ignored safely.
     cat_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="most_frequent")),
         ("encoder", OneHotEncoder(handle_unknown="ignore")),
     ])
 
+    # Combine numeric + categorical preprocessing into a single transformer used inside each model pipeline.
     return ColumnTransformer(
         transformers=[
             ("num", num_pipe, numeric_features),
@@ -225,20 +258,25 @@ def train_for_split(
     except ImportError:
         XGBRegressor = None
 
+    # Work on a copy so the caller's dataframe is never mutated.
     df = base_df.copy()
     # NOTE: Outlier handling is applied on the TRAIN set only (after the split)
     # to avoid leaking information from the test set.
 
+    # Separate target (continuous revenue) from raw feature columns.
     y_raw_full = df["realSum"]
+    # Train on log1p(revenue) to reduce skew; metrics are later computed on Euro scale.
     y_log_full = np.log1p(y_raw_full)
     X_raw_full = df.drop(columns=["realSum"])
 
+    # Split into TRAIN/TEST according to the chosen strategy (often city-stratified).
     print(f"\n=== Running split: {split_strategy} | Outlier removal: {'ON' if drop_outliers else 'OFF'} ===")
+    # Split is computed before any filtering/feature fitting to avoid leakage.
     X_train_raw, X_test_raw, y_train_log, y_test_log = make_train_test_split(
         X_raw_full, y_log_full, X_raw_full["City"], strategy_key=split_strategy
     )
 
-    # Optional: compute IQR on TRAIN and remove outliers from TRAIN; apply same bounds to TEST.
+    # Optional typical-case scope: compute IQR bounds on TRAIN and filter TRAIN; apply the same bounds to TEST.
     if drop_outliers:
         y_train_raw_tmp = pd.Series(np.expm1(y_train_log))
         q1 = y_train_raw_tmp.quantile(0.25)
@@ -266,13 +304,16 @@ def train_for_split(
             f"({removed_test / len(mask_test) * 100:.2f}%)."
         )
 
+    # Fit feature-engineering parameters on TRAIN only, then apply the same transformation to TEST.
     fe_params = compute_fe_params(X_train_raw)
     X_train = _feature_engineering_for_ml(X_train_raw, fe_params=fe_params)
     X_test = _feature_engineering_for_ml(X_test_raw, fe_params=fe_params)
 
+    # Convert log-target back to Euro scale for reporting (y = expm1(log1p(y))).
     y_train_raw = np.expm1(y_train_log)
     y_test_raw = np.expm1(y_test_log)
 
+    # Build preprocessing on the engineered TRAIN feature set (consistent across all models).
     preprocessor = build_preprocessor(X_train)
 
     print(f"Loaded {len(df):,} rows.")
@@ -280,6 +321,7 @@ def train_for_split(
     if drop_outliers:
         print("(Train size reflects train-only outlier filtering)")
 
+    # Define the set of regression models to compare (linear + tree + ensemble + optional boosters).
     model_factories = {
         "Linear Regression (OLS)": lambda: LinearRegression(),
         "Ridge Regression": lambda: Ridge(alpha=1.0),
@@ -328,6 +370,7 @@ def train_for_split(
             random_seed=RANDOM_STATE,
         )
 
+    # Baseline: predict using the mean TRAIN revenue per city (fallback to global mean).
     baseline_name = "City-mean Baseline"
     global_mean = y_train_raw.mean()
     city_means = y_train_raw.groupby(X_train["City"]).mean()
@@ -398,24 +441,27 @@ def train_for_split(
     ]
     all_city_scores: Dict[str, pd.DataFrame] = {}
 
+    # Train and evaluate each model using the same preprocessing + evaluation protocol.
     for model_name, factory in model_factories.items():
         print(f"\n--- Training {model_name} ---")
         reg = factory()
 
+        # Full pipeline: preprocessing -> regressor (prevents train/test preprocessing mismatch).
         pipe = Pipeline([
             ("preprocessor", clone(preprocessor)),
             ("regressor", reg),
         ])
 
+        # Fit on TRAIN (log-scale target).
         pipe.fit(X_train, y_train_log)
 
-        # TEST predictions/metrics
+        # Predict on TEST, then convert predictions back to Euro scale for metrics.
         preds_log = pipe.predict(X_test)
         preds_raw = np.expm1(preds_log)
         preds_raw = np.clip(preds_raw, 0, None)
         metrics = eval_metrics(y_test_raw, preds_raw)
 
-        # TRAIN predictions/metrics (overfitting check)
+        # Also compute TRAIN metrics as an overfitting sanity check (not used for model selection).
         train_preds_log = pipe.predict(X_train)
         train_preds_raw = np.expm1(train_preds_log)
         train_preds_raw = np.clip(train_preds_raw, 0, None)
@@ -432,6 +478,7 @@ def train_for_split(
             "Train_R2": train_metrics["R2"],
         })
 
+        # Persist the fitted pipeline so results can be reproduced without retraining.
         model_path = models_dir / f"model_{model_name.replace(' ', '_').lower()}.pkl"
         joblib.dump(pipe, model_path)
         print(f"Saved model → {model_path}")
@@ -451,6 +498,7 @@ def train_for_split(
         test_df["y_true"] = y_test_raw
         test_df["y_pred"] = preds_raw
 
+        # Per-city metrics: check whether the model generalises consistently across cities.
         city_scores = (
             test_df.groupby("City")
             .apply(
@@ -520,6 +568,7 @@ def train_for_split(
             plt.close(fig)
             print(f"Saved decision tree visualization → {tree_path}")
 
+    # Collect all models (including baseline) into one comparison table (sorted by RMSE).
     results_df = pd.DataFrame(results).sort_values("RMSE").reset_index(drop=True)
     print("\n=== FINAL MODEL PERFORMANCE (RAW SCALE) ===")
     print(results_df)
@@ -527,6 +576,7 @@ def train_for_split(
     results_df.to_csv(results_csv_path, index=False)
     print(f"Saved regression comparison table → {results_csv_path}")
 
+    # Create a compact visual comparison across models for the report appendix.
     # Horizontal comparison plot to keep long model names readable.
     display_name = {
         "City-mean Baseline": "Baseline",
@@ -567,6 +617,7 @@ def train_for_split(
     plt.close(fig)
     print(f"Saved overall model comparison plot → {overall_path}")
 
+    # Optional: build an R² heatmap across cities and models to visualise cross-city robustness.
     if all_city_scores:
         r2_frames = []
         for model_name, scores in all_city_scores.items():
